@@ -81,7 +81,7 @@ func (mp *MigrationPlan) ensureMigrationsTable(database DatabaseConnection) erro
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS migrations (
 			id INT AUTO_INCREMENT,
-			migrationName VARCHAR(255)
+			migrationName VARCHAR(255) UNIQUE NOT NULL
 		)
 	`
 	_, err := database.Exec(createTableQuery)
@@ -164,7 +164,36 @@ func (mp *MigrationPlan) Up(database DatabaseConnection) (migrationsPerformed ui
 		return 0, nil
 	}
 
-	if _, err = database.Exec(nextMigration.UpQuery); nil != err {
+	trx, err := database.Begin()
+
+	if nil != err {
+		return 0, err
+	}
+
+	if _, err = trx.Exec(nextMigration.UpQuery); nil != err {
+		if rollbackErr := trx.Rollback(); nil != rollbackErr {
+			return 0, rollbackErr
+		}
+
+		return 0, err
+	}
+
+	saveMigrationQuery := `
+		INSERT INTO migrations (
+			migrationName
+		) VALUES (
+			?
+		)
+	`
+	if _, err = trx.Exec(saveMigrationQuery, nextMigration.Name); nil != err {
+		if rollbackErr := trx.Rollback(); nil != rollbackErr {
+			return 0, rollbackErr
+		}
+
+		return 0, err
+	}
+
+	if err = trx.Commit(); nil != err {
 		return 0, err
 	}
 
@@ -182,7 +211,29 @@ func (mp *MigrationPlan) Down(database DatabaseConnection) (migrationsPerformed 
 		return 0, nil
 	}
 
-	if _, err = database.Exec(currentMigration.DownQuery); nil != err {
+	trx, err := database.Begin()
+
+	if _, err = trx.Exec(currentMigration.DownQuery); nil != err {
+		if rollbackErr := trx.Rollback(); nil != rollbackErr {
+			return 0, rollbackErr
+		}
+
+		return 0, err
+	}
+
+	saveMigrationQuery := `
+		DELETE FROM migrations
+		WHERE migrationName = ?
+	`
+	if _, err = trx.Exec(saveMigrationQuery, currentMigration.Name); nil != err {
+		if rollbackErr := trx.Rollback(); nil != rollbackErr {
+			return 0, rollbackErr
+		}
+
+		return 0, err
+	}
+
+	if err = trx.Commit(); nil != err {
 		return 0, err
 	}
 
