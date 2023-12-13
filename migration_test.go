@@ -396,3 +396,95 @@ func TestDown(t *testing.T) {
 		t.Fatalf("mp.Down() returned a count of %d instead of 0.", count)
 	}
 }
+
+// Tests MigrationPlan.Latest()
+func TestLatest(t *testing.T) {
+	var database *sql.DB
+
+	cfg := mysql.Config{
+		User:                 "test",
+		Passwd:               "test",
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               "test",
+		AllowNativePasswords: true,
+	}
+
+	database, err := sql.Open("mysql", cfg.FormatDSN())
+
+	if nil != err {
+		t.Fatalf("Failed to open database: %s", err.Error())
+	}
+
+	mp := MigrationPlan{}
+	mp.Add(Migration{
+		Name: "migration-1",
+		UpQuery: `
+			CREATE TABLE testTable1 (
+				id INT KEY AUTO_INCREMENT,
+				testColumn1 VARCHAR(255)
+			)
+		`,
+		DownQuery: "",
+	}).Add(Migration{
+		Name: "migration-2",
+		UpQuery: `
+			CREATE TABLE testTable2 (
+				id INT KEY AUTO_INCREMENT,
+				testColumn2 VARCHAR(255)
+			)
+		`,
+		DownQuery: "",
+	})
+
+	count, err := mp.Latest(database)
+
+	if nil != err {
+		t.Fatalf("mp.Latest() failed: %s", err.Error())
+	}
+
+	if 2 != count {
+		t.Fatalf("mp.Latest() returned a count of %d instead of 2.", count)
+	}
+}
+
+// Tests MigrationPlan.Reset()
+func TestReset(t *testing.T) {
+	var database *sql.DB
+
+	cfg := mysql.Config{
+		User:                 "test",
+		Passwd:               "test",
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               "test",
+		AllowNativePasswords: true,
+	}
+
+	database, err := sql.Open("mysql", cfg.FormatDSN())
+
+	if nil != err {
+		t.Fatalf("Failed to open database: %s", err.Error())
+	}
+
+	mp := MigrationPlan{}
+	mp.Add(Migration{
+		Name:      "migration-1",
+		UpQuery:   "",
+		DownQuery: "DROP TABLE testTable1",
+	}).Add(Migration{
+		Name:      "migration-2",
+		UpQuery:   "",
+		DownQuery: "DROP TABLE testTable2",
+	})
+
+	count, err := mp.Reset(database)
+
+	if nil != err {
+		t.Fatalf("mp.Reset() failed: %s", err.Error())
+	}
+
+	if 2 != count {
+		t.Fatalf("mp.Reset() returned a count of %d instead of 2.", count)
+	}
+}
