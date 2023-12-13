@@ -5,14 +5,17 @@ import (
 	"fmt"
 )
 
+// MigrationError implements the error interface for this module.
 type MigrationError struct {
 	Message string
 }
 
+// Error returns the error message from MigrationError.
 func (err *MigrationError) Error() string {
 	return err.Message
 }
 
+// Migration represents a database migration.
 type Migration struct {
 	Name      string
 	UpQuery   string
@@ -21,11 +24,15 @@ type Migration struct {
 	Next      *Migration
 }
 
+// MigrationPlan is a linked list of database migrations that are intended to be executed
+// in order.
 type MigrationPlan struct {
 	First *Migration
 	Last  *Migration
 }
 
+// Add appends a copy of the migration provided to the mp. A pointer to mp is returned, so
+// calls to Add can be chained.
 func (mp *MigrationPlan) Add(migration Migration) (result *MigrationPlan) {
 	migration.Next = nil
 	migration.Previous = nil
@@ -44,6 +51,8 @@ func (mp *MigrationPlan) Add(migration Migration) (result *MigrationPlan) {
 	return mp
 }
 
+// Concat copies all migrations from migrationPlans and appends them to the end of mp. A pointer
+// to mp is returned, so calls to Concat can be chained.
 func (mp *MigrationPlan) Concat(migrationPlans ...*MigrationPlan) (result *MigrationPlan) {
 	for _, plan := range migrationPlans {
 		migration := plan.First
@@ -57,6 +66,7 @@ func (mp *MigrationPlan) Concat(migrationPlans ...*MigrationPlan) (result *Migra
 	return mp
 }
 
+// ensureMigrationsTable creates the migration tracking table if it does not exist.
 func (mp *MigrationPlan) ensureMigrationsTable(database *sql.DB) error {
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS migrations (
@@ -69,6 +79,8 @@ func (mp *MigrationPlan) ensureMigrationsTable(database *sql.DB) error {
 	return err
 }
 
+// getCurrentMigration returns a pointer to the struct representing the last migration that has been performed
+// according to the migration tracking table. If no migrations have been performed yet, nil is returned.
 func (mp *MigrationPlan) getCurrentMigration(database *sql.DB) (currentMigration *Migration, err error) {
 	if err = mp.ensureMigrationsTable(database); err != nil {
 		return nil, err
@@ -125,6 +137,10 @@ func (mp *MigrationPlan) getCurrentMigration(database *sql.DB) (currentMigration
 	return currentMigration, nil
 }
 
+// Up performs the first migration in the migration plan that has not yet been performed.
+// If the migration was performed successfully, migrationsPerformed is 1, and err is nil.
+// If there are no more migrations to perform, migrationsPerformed is 0 and err is nil.
+// If an error occurred, error is non-nil.
 func (mp *MigrationPlan) Up(database *sql.DB) (migrationsPerformed uint, err error) {
 	currentMigration, err := mp.getCurrentMigration(database)
 
@@ -180,6 +196,10 @@ func (mp *MigrationPlan) Up(database *sql.DB) (migrationsPerformed uint, err err
 	return 1, nil
 }
 
+// Down rolls back the last migration that has been performed in the migration plan.
+// If the migration was performed successfully, migrationsPerformed is 1, and err is nil.
+// If there are no more migrations to roll back, migrationsPerformed is 0, and err is nil.
+// If an error occurred, err is non-nil.
 func (mp *MigrationPlan) Down(database *sql.DB) (migrationsPerformed uint, err error) {
 	currentMigration, err := mp.getCurrentMigration(database)
 
@@ -220,6 +240,11 @@ func (mp *MigrationPlan) Down(database *sql.DB) (migrationsPerformed uint, err e
 	return 1, nil
 }
 
+// Latest performs all migrations in the migration plan that have not yet been performed.
+// migrationsPerformed is the number of migrations that were performed successfully. If all
+// migrations were performed successfully, err is nil. If an error occurred, no further
+// migrations are performed, and err is non-nil. Successful migrations will not be rolled
+// back on error.
 func (mp *MigrationPlan) Latest(database *sql.DB) (migrationsPerformed uint, err error) {
 	for true {
 		var migrationCount uint
@@ -235,6 +260,10 @@ func (mp *MigrationPlan) Latest(database *sql.DB) (migrationsPerformed uint, err
 	return migrationsPerformed, err
 }
 
+// Reset rolls back all migrations in the migration plan. migrationsPerformed is the number
+// of migrations that were successfully rolled back. If all migrations were rolled back
+// successfully, err is nil. If an error occurred, no further migrations are rolled back,
+// and err is non-nil.
 func (mp *MigrationPlan) Reset(database *sql.DB) (migrationsPerformed uint, err error) {
 	for true {
 		var migrationCount uint
