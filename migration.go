@@ -1,29 +1,9 @@
 package migration
 
-import "fmt"
-
-type QueryResult interface {
-	LastInsertId() (int64, error)
-	RowsAffected() (int64, error)
-}
-
-type QueryRows interface {
-	Next() bool
-	Close() error
-	Scan(dest ...any) error
-}
-
-type DatabaseTransaction interface {
-	Exec(query string, args ...any) (QueryResult, error)
-	Rollback() error
-	Commit() error
-}
-
-type DatabaseConnection interface {
-	Exec(query string, args ...any) (QueryResult, error)
-	Query(query string, args ...any) (QueryRows, error)
-	Begin() (DatabaseTransaction, error)
-}
+import (
+	"database/sql"
+	"fmt"
+)
 
 type MigrationError struct {
 	Message string
@@ -77,10 +57,10 @@ func (mp *MigrationPlan) Concat(migrationPlans ...*MigrationPlan) (result *Migra
 	return mp
 }
 
-func (mp *MigrationPlan) ensureMigrationsTable(database DatabaseConnection) error {
+func (mp *MigrationPlan) ensureMigrationsTable(database *sql.DB) error {
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS migrations (
-			id INT AUTO_INCREMENT,
+			id INT KEY AUTO_INCREMENT,
 			migrationName VARCHAR(255) UNIQUE NOT NULL
 		)
 	`
@@ -89,7 +69,7 @@ func (mp *MigrationPlan) ensureMigrationsTable(database DatabaseConnection) erro
 	return err
 }
 
-func (mp *MigrationPlan) getCurrentMigration(database DatabaseConnection) (currentMigration *Migration, err error) {
+func (mp *MigrationPlan) getCurrentMigration(database *sql.DB) (currentMigration *Migration, err error) {
 	if err = mp.ensureMigrationsTable(database); err != nil {
 		return nil, err
 	}
@@ -113,7 +93,7 @@ func (mp *MigrationPlan) getCurrentMigration(database DatabaseConnection) (curre
 
 	for rows.Next() {
 		var migrationName string
-		err = rows.Scan(migrationName)
+		err = rows.Scan(&migrationName)
 
 		if migrationToCheck == nil {
 			return nil, &MigrationError{
@@ -145,7 +125,7 @@ func (mp *MigrationPlan) getCurrentMigration(database DatabaseConnection) (curre
 	return currentMigration, nil
 }
 
-func (mp *MigrationPlan) Up(database DatabaseConnection) (migrationsPerformed uint, err error) {
+func (mp *MigrationPlan) Up(database *sql.DB) (migrationsPerformed uint, err error) {
 	currentMigration, err := mp.getCurrentMigration(database)
 
 	if nil != err {
@@ -200,7 +180,7 @@ func (mp *MigrationPlan) Up(database DatabaseConnection) (migrationsPerformed ui
 	return 1, nil
 }
 
-func (mp *MigrationPlan) Down(database DatabaseConnection) (migrationsPerformed uint, err error) {
+func (mp *MigrationPlan) Down(database *sql.DB) (migrationsPerformed uint, err error) {
 	currentMigration, err := mp.getCurrentMigration(database)
 
 	if nil != err {
@@ -240,7 +220,7 @@ func (mp *MigrationPlan) Down(database DatabaseConnection) (migrationsPerformed 
 	return 1, nil
 }
 
-func (mp *MigrationPlan) Latest(database DatabaseConnection) (migrationsPerformed uint, err error) {
+func (mp *MigrationPlan) Latest(database *sql.DB) (migrationsPerformed uint, err error) {
 	for true {
 		var migrationCount uint
 		migrationCount, err = mp.Up(database)
@@ -255,7 +235,7 @@ func (mp *MigrationPlan) Latest(database DatabaseConnection) (migrationsPerforme
 	return migrationsPerformed, err
 }
 
-func (mp *MigrationPlan) Reset(database DatabaseConnection) (migrationsPerformed uint, err error) {
+func (mp *MigrationPlan) Reset(database *sql.DB) (migrationsPerformed uint, err error) {
 	for true {
 		var migrationCount uint
 		migrationCount, err = mp.Down(database)

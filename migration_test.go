@@ -1,7 +1,13 @@
 package migration
 
-import "testing"
+import (
+	"database/sql"
+	"testing"
 
+	"github.com/go-sql-driver/mysql"
+)
+
+// Tests MigrationPlan.Add()
 func TestAdd(t *testing.T) {
 	mp := MigrationPlan{}
 
@@ -95,6 +101,7 @@ func TestAdd(t *testing.T) {
 	}
 }
 
+// Tests MigrationPlan.Concat()
 func TestConcat(t *testing.T) {
 	// mp1
 
@@ -271,5 +278,121 @@ func TestConcat(t *testing.T) {
 	}
 	if m6.Next != nil {
 		t.Fatalf("m6.Next should be nil.")
+	}
+}
+
+// Tests MigrationPlan.Up()
+func TestUp(t *testing.T) {
+	var database *sql.DB
+
+	cfg := mysql.Config{
+		User:                 "test",
+		Passwd:               "test",
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               "test",
+		AllowNativePasswords: true,
+	}
+
+	database, err := sql.Open("mysql", cfg.FormatDSN())
+
+	if nil != err {
+		t.Fatalf("Failed to open database: %s", err.Error())
+	}
+
+	mp := MigrationPlan{}
+	mp.Add(Migration{
+		Name: "migration-1",
+		UpQuery: `
+			CREATE TABLE testTable1 (
+				id INT KEY AUTO_INCREMENT,
+				testColumn1 VARCHAR(255)
+			)
+		`,
+		DownQuery: "",
+	}).Add(Migration{
+		Name: "migration-2",
+		UpQuery: `
+			CREATE TABLE testTable2 (
+				id INT KEY AUTO_INCREMENT,
+				testColumn2 VARCHAR(255)
+			)
+		`,
+		DownQuery: "",
+	})
+
+	for i := 0; i < 2; i++ {
+		count, err := mp.Up(database)
+
+		if nil != err {
+			t.Fatalf("mp.Up() failed: %s", err.Error())
+		}
+
+		if 1 != count {
+			t.Fatalf("mp.Up() returned a count of %d instead of 1.", count)
+		}
+	}
+
+	count, err := mp.Up(database)
+
+	if nil != err {
+		t.Fatalf("mp.Up() failed: %s", err.Error())
+	}
+
+	if 0 != count {
+		t.Fatalf("mp.Up() returned a count of %d instead of 0.", count)
+	}
+}
+
+// Tests MigrationPlan.Down()
+func TestDown(t *testing.T) {
+	var database *sql.DB
+
+	cfg := mysql.Config{
+		User:                 "test",
+		Passwd:               "test",
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               "test",
+		AllowNativePasswords: true,
+	}
+
+	database, err := sql.Open("mysql", cfg.FormatDSN())
+
+	if nil != err {
+		t.Fatalf("Failed to open database: %s", err.Error())
+	}
+
+	mp := MigrationPlan{}
+	mp.Add(Migration{
+		Name:      "migration-1",
+		UpQuery:   "",
+		DownQuery: "DROP TABLE testTable1",
+	}).Add(Migration{
+		Name:      "migration-2",
+		UpQuery:   "",
+		DownQuery: "DROP TABLE testTable2",
+	})
+
+	for i := 0; i < 2; i++ {
+		count, err := mp.Down(database)
+
+		if nil != err {
+			t.Fatalf("mp.Down() failed: %s", err.Error())
+		}
+
+		if 1 != count {
+			t.Fatalf("mp.Down() returned a count of %d instead of 1.", count)
+		}
+	}
+
+	count, err := mp.Down(database)
+
+	if nil != err {
+		t.Fatalf("mp.Down() failed: %s", err.Error())
+	}
+
+	if 0 != count {
+		t.Fatalf("mp.Down() returned a count of %d instead of 0.", count)
 	}
 }
