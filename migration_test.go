@@ -7,6 +7,38 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
+// MySQL test configuration
+var cfg = mysql.Config{
+	User:                 "test",
+	Passwd:               "test",
+	Net:                  "tcp",
+	Addr:                 "127.0.0.1:3306",
+	DBName:               "test",
+	AllowNativePasswords: true,
+}
+
+// Test migrations
+var tm1 = Migration{
+	Name: "migration-1",
+	UpQuery: `
+		CREATE TABLE testTable1 (
+			id INT KEY AUTO_INCREMENT,
+			testColumn1 VARCHAR(255)
+		)
+	`,
+	DownQuery: "DROP TABLE testTable1",
+}
+var tm2 = Migration{
+	Name: "migration-2",
+	UpQuery: `
+		CREATE TABLE testTable2 (
+			id INT KEY AUTO_INCREMENT,
+			testColumn2 VARCHAR(255)
+		)
+	`,
+	DownQuery: "DROP TABLE testTable2",
+}
+
 // Tests MigrationPlan.Add()
 func TestAdd(t *testing.T) {
 	mp := MigrationPlan{}
@@ -301,25 +333,7 @@ func TestUp(t *testing.T) {
 	}
 
 	mp := MigrationPlan{}
-	mp.Add(Migration{
-		Name: "migration-1",
-		UpQuery: `
-			CREATE TABLE testTable1 (
-				id INT KEY AUTO_INCREMENT,
-				testColumn1 VARCHAR(255)
-			)
-		`,
-		DownQuery: "",
-	}).Add(Migration{
-		Name: "migration-2",
-		UpQuery: `
-			CREATE TABLE testTable2 (
-				id INT KEY AUTO_INCREMENT,
-				testColumn2 VARCHAR(255)
-			)
-		`,
-		DownQuery: "",
-	})
+	mp.Add(tm1).Add(tm2)
 
 	for i := 0; i < 2; i++ {
 		count, err := mp.Up(database)
@@ -364,15 +378,7 @@ func TestDown(t *testing.T) {
 	}
 
 	mp := MigrationPlan{}
-	mp.Add(Migration{
-		Name:      "migration-1",
-		UpQuery:   "",
-		DownQuery: "DROP TABLE testTable1",
-	}).Add(Migration{
-		Name:      "migration-2",
-		UpQuery:   "",
-		DownQuery: "DROP TABLE testTable2",
-	})
+	mp.Add(tm1).Add(tm2)
 
 	for i := 0; i < 2; i++ {
 		count, err := mp.Down(database)
@@ -417,25 +423,7 @@ func TestLatest(t *testing.T) {
 	}
 
 	mp := MigrationPlan{}
-	mp.Add(Migration{
-		Name: "migration-1",
-		UpQuery: `
-			CREATE TABLE testTable1 (
-				id INT KEY AUTO_INCREMENT,
-				testColumn1 VARCHAR(255)
-			)
-		`,
-		DownQuery: "",
-	}).Add(Migration{
-		Name: "migration-2",
-		UpQuery: `
-			CREATE TABLE testTable2 (
-				id INT KEY AUTO_INCREMENT,
-				testColumn2 VARCHAR(255)
-			)
-		`,
-		DownQuery: "",
-	})
+	mp.Add(tm1).Add(tm2)
 
 	count, err := mp.Latest(database)
 
@@ -452,15 +440,6 @@ func TestLatest(t *testing.T) {
 func TestReset(t *testing.T) {
 	var database *sql.DB
 
-	cfg := mysql.Config{
-		User:                 "test",
-		Passwd:               "test",
-		Net:                  "tcp",
-		Addr:                 "127.0.0.1:3306",
-		DBName:               "test",
-		AllowNativePasswords: true,
-	}
-
 	database, err := sql.Open("mysql", cfg.FormatDSN())
 
 	if nil != err {
@@ -468,15 +447,7 @@ func TestReset(t *testing.T) {
 	}
 
 	mp := MigrationPlan{}
-	mp.Add(Migration{
-		Name:      "migration-1",
-		UpQuery:   "",
-		DownQuery: "DROP TABLE testTable1",
-	}).Add(Migration{
-		Name:      "migration-2",
-		UpQuery:   "",
-		DownQuery: "DROP TABLE testTable2",
-	})
+	mp.Add(tm1).Add(tm2)
 
 	count, err := mp.Reset(database)
 
